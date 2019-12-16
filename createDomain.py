@@ -81,7 +81,57 @@ def updateDomain(accountId,domainId,domain_details,api_auth_token):
     response_web_security = requests.patch(target,params=parameter_web_security, json=domain_details)
 
     print (f'Response status code {response_web_security.status_code}')
+
+
+def createACL(accountId,aclName,api_auth_token):
+    # input = 
+    #   1.accountId (distil account ID)
+    #   2. aclName : ACL Name
+    #   3. api auth token
+    # return = it will create a blank ACL and return an ACL ID
+
+    base = 'https://api.distilnetworks.com'
+    endpoint = '/api/v1/access_control_lists'
+    target = base + endpoint
     
+    # Parameter 
+    params = {'account_id' : accountId, 'auth_token' : api_auth_token}
+    
+    # Call REST API
+    acl_dict={'access_control_list':{'name':aclName}}
+    r=requests.post(target, params=params, json=acl_dict)
+
+    # convert json str to python dictionary 
+    r_data =  json.loads(json.dumps(r.json()))
+    
+    #print (f'ACL Response status code {response.status_code}')
+    #print (f'ACL Body {response.text}')
+    
+    # Return ACL ID
+    return r_data['access_control_list']['id']
+
+def createBatchRulesACL(aclId,rules_to_add,api_auth_token):
+    # input = 
+    #   1.aclId 
+    #   2.rules to add 
+    #   3. api auth token
+    # output = it will add multiple rules into a blank ACL 
+
+
+    base = 'https://api.distilnetworks.com'
+    endpoint = f'/api/v1/access_control_lists/{aclId}/rules/batch_create'
+    target = base + endpoint
+    
+    # Parameter  
+    params = {'access_control_list_id' : aclId, 'auth_token' : api_auth_token}
+    
+    r=requests.post(target, params=params, json=rules_to_add)
+    
+    #print (f'Batch Rule Addtion Response status code {response.status_code}')
+    #print (f'Batch Rule Addtion Body {response.text}')
+    
+    return json.loads(r.text)
+
 
 ### Main () 
 ### Enable following environment Variables 
@@ -129,10 +179,10 @@ print (f"\n --Creating a domain on Distil .... ")
 
 
 domain_details = {  "web_security_setting": {
-         "aggregator_user_agent_action": "block",
-        "bad_user_agent_action": "block",
-        "known_violators_action": "block",
-        "service_provider_action": "block",
+         "aggregator_user_agent_action": "captcha",
+        "bad_user_agent_action": "captcha",
+        "known_violators_action": "captcha",
+        "service_provider_action": "captcha",
         "javascript_action": "block",
 
         "force_identify": "false",
@@ -151,14 +201,39 @@ domain_details = {  "web_security_setting": {
 
 }
 
+rules_to_add={
+    'rules': [
+        {
+            'list': 'whitelist',
+            'type': 'user_agent',
+            'value': 'Google%-Structured%-Data%-Testing%-Tool',
+            'note' : 'this is a 2nd note'
+            },
+        {
+            'list': 'whitelist',
+            'type': 'ip',
+            'value': '0.0.0.0',
+            'note' : 'this is a note'
+            }        
+
+    ]
+
+}
+
 
 domain_id = createDomain(accountId,domain_info,API_AUTH_TOKEN)
-
 print (f"Domain created: {domain_info['domain']['name']} \nDomain id: {domain_id}")
-
 print (f"\n --Updating domain configuration ... ")
-
 
 # Call updateDomain to update its settings 
 # 1. First grab a web security ID 
 updateDomain(accountId,domain_id,domain_details,API_AUTH_TOKEN)
+
+# Create ACL 
+print (f"\n --Creating an ACL on Distil .... ")
+aclId=createACL(accountId,domain_info['domain']['name'],API_AUTH_TOKEN)
+print (f"\n ACL ID : {aclId}")
+
+# Add rules to the ACL
+print (f"\n --Adding rules to an ACL .... ")
+createBatchRulesACL(aclId,rules_to_add,API_AUTH_TOKEN)
