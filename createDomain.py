@@ -2,6 +2,35 @@
 import json,os,requests,sys
 from pprint import pprint
 
+
+def isDomainExist(accountId,domain_name,api_auth_token):
+    # This will verify if domain already exists or not
+    # return : True ( if domain exists other wise False )
+
+    # base url for domain search
+    base = 'https://api.distilnetworks.com'
+
+    # set the endpoint you need
+    endpoint = '/api/v1/platform/domains'
+
+    # construct the full target url
+    target = base + endpoint
+
+    # parameters : ?account_id=xxxx&auth_token=xxxxx 
+    parameters = {'account_id' : accountId, 'name' : domain_name, 'auth_token' : api_auth_token}
+    
+    # headers
+    headers = {'Content-Type': 'application/json', 'Accept' : 'application/json'}
+
+    # Call REST API
+    r = requests.get(target, headers=headers, params=parameters)
+
+    # Use the json module to load a response into a dictionary.
+    r_dict = json.loads(r.text)
+
+    # Return True if domain exist or False if it doesn't
+    return bool(r_dict['domains'])
+
 def createDomain(accountId,domain_info,api_auth_token):
     # input = accountId ( distil account ID)
     # domain_info = contains domain initial configuration
@@ -152,8 +181,6 @@ print ("\n --Environment Variables ... ")
 print(f"\nAccount_ID : {accountId} \nDomain Name : {domain_info['domain']['name']} \
     \nOrigin Server IP: {domain_info['domain']['origin_server']} \nAPI Auth Token : {API_AUTH_TOKEN}")
 
-print (f"\n --Creating a domain on Distil .... ")
-
 # Distil Cheat sheet ---
 # Automated Threats Policy
 #   1. Known Violators : known_violators_action
@@ -220,7 +247,13 @@ rules_to_add={
 
 }
 
+# Verify if domain exist before proceed 
 
+if (isDomainExist(accountId,domain_info['domain']['name'],API_AUTH_TOKEN)):
+    print (f'Domain exist ... skipping')
+    sys.exit()
+
+print (f"\n --Creating a domain on Distil .... ")
 domain_id = createDomain(accountId,domain_info,API_AUTH_TOKEN)
 print (f"Domain created: {domain_info['domain']['name']} \nDomain id: {domain_id}")
 print (f"\n --Updating domain configuration ... ")
