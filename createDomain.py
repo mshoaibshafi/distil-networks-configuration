@@ -3,23 +3,18 @@ import json,os,requests,sys
 from pprint import pprint
 
 
-def isDomainExist(accountId,domain_name,api_auth_token):
-    # This will verify if domain already exists or not
-    # return : True ( if domain exists other wise False )
+def sanityCheck(accountId,domain_info,api_auth_token):
+    # Check #1 
+    # Verify if domain already exists or not
+    # return : True ( if domain exists other wise continue )
 
-    # base url for domain search
+    sanitychk = ['False','SomeText']
+
     base = 'https://api.distilnetworks.com'
-
-    # set the endpoint you need
     endpoint = '/api/v1/platform/domains'
-
-    # construct the full target url
     target = base + endpoint
 
-    # parameters : ?account_id=xxxx&auth_token=xxxxx 
-    parameters = {'account_id' : accountId, 'name' : domain_name, 'auth_token' : api_auth_token}
-    
-    # headers
+    parameters = {'account_id' : accountId, 'name' : domain_info['domain']['name'], 'auth_token' : api_auth_token}
     headers = {'Content-Type': 'application/json', 'Accept' : 'application/json'}
 
     # Call REST API
@@ -29,7 +24,30 @@ def isDomainExist(accountId,domain_name,api_auth_token):
     r_dict = json.loads(r.text)
 
     # Return True if domain exist or False if it doesn't
-    return bool(r_dict['domains'])
+    if bool(r_dict['domains']):
+        sanitychk=['True',f"Domain {domain_info['domain']['name']} already exist"]
+        return sanitychk
+
+    # Check #2
+    # Verify if IP already in used
+    # return : True ( if IP in use otherwise False )
+
+    # Only parameters change for the REST API call
+    parameters = {'account_id' : accountId, 'auth_token' : api_auth_token}
+    headers = {'Content-Type': 'application/json', 'Accept' : 'application/json'}
+    r = requests.get(target, headers=headers, params=parameters)
+
+    # Use the json module to load a response into a dictionary.
+    r_dict = json.loads(r.text)
+
+    for domain in r_dict['domains']:
+        if domain['default_origin_server'] == domain_info['domain']['origin_server']:
+            #print (f"match : {domain['default_origin_server']}")
+            sanitychk=['True',f"IP {domain_info['domain']['origin_server']} already in use"]
+            return sanitychk
+
+    return sanitychk
+
 
 def createDomain(accountId,domain_info,api_auth_token):
     # input = accountId ( distil account ID)
@@ -161,6 +179,30 @@ def createBatchRulesACL(aclId,rules_to_add,api_auth_token):
     
     return json.loads(r.text)
 
+def createRuleScope(domainId,path,luaEnabled,apiAuthToken):
+    base = 'https://api.distilnetworks.com'
+    endpoint = '/api/v1/rule_scopes'
+    target = base + endpoint
+ 
+    params = {'domain_id' : domainId, 'auth_token' : apiAuthToken}
+ 
+    payload={
+      "rule_scope": {
+        "type": "path",
+        "match": path,
+        "lua_pattern_enabled": luaEnabled
+      }
+    }
+    r=requests.post(target, params=params, json=payload)
+    print (f'Rule Scope Response status code {r.status_code}')
+    
+    # convert json str to python dictionary 
+    r_data =  json.loads(json.dumps(r.json()))
+        
+    # Return RuleScope ID
+    print (r_data)
+    #return r_data['access_control_list']['id']
+
 
 ### Main () 
 ### Enable following environment Variables 
@@ -247,10 +289,15 @@ rules_to_add={
 
 }
 
-# Verify if domain exist before proceed 
+# Verify the following before proceed further
+# 1. if domain already exist
+# 2. if IP address already in used
+# 3. TODO : IP address part of certain subnet . I want to keep IP in the range of 172.31.12.0/23
 
-if (isDomainExist(accountId,domain_info['domain']['name'],API_AUTH_TOKEN)):
-    print (f'Domain exist ... skipping')
+SanityCheck = sanityCheck(accountId,domain_info,API_AUTH_TOKEN)
+
+if SanityCheck[0] == 'True':
+    print (f'Err: {SanityCheck[1]}')
     sys.exit()
 
 print (f"\n --Creating a domain on Distil .... ")
@@ -270,3 +317,13 @@ print (f"\n ACL ID : {aclId}")
 # Add rules to the ACL
 print (f"\n --Adding rules to an ACL .... ")
 createBatchRulesACL(aclId,rules_to_add,API_AUTH_TOKEN)
+
+# Extract the RuleScope Id
+
+
+
+# Create RuleScope 
+#RuleScopeId = 
+# createRuleScope(domain_id,"default","true",API_AUTH_TOKEN)
+
+#print (f"Rule Scope ID {RuleScopeId}")
